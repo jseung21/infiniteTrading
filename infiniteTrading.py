@@ -4,23 +4,48 @@ import numpy as np
 
 stock_name = "TQQQ"  # 주식 종목명
 balance_amount = 10000  # 전체 잔액
-start_trade_date = "2022-01-01"  # 거래 시작일
+start_trade_date = "2023-01-01"  # 거래 시작일
 end_trade_date = "2024-01-01"  # 거래 종료일
 buy_times = 40  # 매수 회차
 buffer_trading_point = 5  # 버퍼 매매 포인트
 sell_point = 10  # 매도 포인트
 buffer_buy_divide = 2 # 버퍼 매수 분할 수치
 buffer_sell_divide = 4 # 버퍼 매도 분할 수치
-batch_yn = False
+trading_fee_rate = 0.001  # 거래 수수료율 예: 0.1%
+stop_loss_threshold = 0.1  # 손절매 기준 예: 10%
+batch_yn = False # 다량 처리
 
+def CalculateFee(amount):
+    """
+    거래 수수료를 계산하는 함수
+    """
+    return amount * trading_fee_rate
+
+def StopLoss(close_price, balance_amount, Number_share_held, average_buy_amount, total_stock_buy_amount):
+    """
+    손절매 조건을 확인하고 손절매를 수행하는 함수
+    """
+    actual_sell_amount = round(Number_share_held * close_price, 2)
+    balance_amount += actual_sell_amount
+    Number_share_held = 0
+    total_stock_buy_amount = 0
+    average_buy_amount = 0
+    init_trade_start_yn = "N"
+    trading_flag = "STOP_L"
+    # 손절매 후 갱신된 잔고와 거래 정보를 반환
+    return balance_amount, Number_share_held, average_buy_amount, total_stock_buy_amount, init_trade_start_yn, trading_flag
 
 def SetStockFinalPriceByDate(stock_name, start_trade_date, end_trade_date):
     """
     주식 종목(stock_name)의 날짜별 종가(stock_history)를 설정하는 함수
     """
-    stock = yf.Ticker(stock_name)
-    stock_history = stock.history(start=start_trade_date, end=end_trade_date)
-    return stock_history
+    try:
+        stock = yf.Ticker(stock_name)
+        stock_history = stock.history(start=start_trade_date, end=end_trade_date)
+        return stock_history
+    except Exception as e:
+        print(f"Error fetching data: {e}")
+        return None
 
 def Buy(close_price, balance_amount, one_time_buy_amount, Number_share_held, average_buy_amount, total_stock_buy_amount, buffer_trading_potrading, init_trade_start_yn):
     """
@@ -50,8 +75,10 @@ def Buy(close_price, balance_amount, one_time_buy_amount, Number_share_held, ave
 
     # 실제 매수 금액
     actual_buy_amount = round(acutual_number_buy_stock * close_price, 2)
+    # 매매 수수료 계산
+    buy_fee = CalculateFee(actual_buy_amount)
     # 전체 잔고 계산
-    balance_amount -= actual_buy_amount
+    balance_amount -= (actual_buy_amount + buy_fee)
     # 전체 보유 수량 계산
     Number_share_held += acutual_number_buy_stock
     # 전체 매수 금액 계산
@@ -98,13 +125,18 @@ def Sell(close_price, balance_amount, Number_share_held, average_buy_amount, tot
         total_stock_buy_amount = 0
         # 평균 매수가 계산  
         average_buy_amount = 0
+        
         trading_flag = "SELL" 
+
+    # 매매 수수료 계산 
+    sell_fee = CalculateFee(actual_sell_amount)
+
     # 전체 잔고 계산
-    balance_amount += actual_sell_amount
+    balance_amount += (actual_sell_amount - sell_fee)
     
     return balance_amount, Number_share_held, average_buy_amount, round(total_stock_buy_amount,2), init_trade_start_yn,trading_flag
 
-def DoTrading(stock_name,balance_amount,start_trade_date,end_trade_date,buy_times,buffer_trading_point,sell_point,buffer_buy_divide,buffer_sell_divide,batch_yn):
+def DoTrading(stock_name,balance_amount,start_trade_date,end_trade_date,buy_times,buffer_trading_point,sell_point,buffer_buy_divide,buffer_sell_divide,stop_loss_threshold,batch_yn):
     
     assessment_amount = 0 # 평가 금액
     stock_history = []  # 주식 이력 (빈 리스트로 초기화)
@@ -153,6 +185,13 @@ def DoTrading(stock_name,balance_amount,start_trade_date,end_trade_date,buy_time
                                                                                                 buffer_trading_point,
                                                                                                 init_trade_start_yn)
             init_trade_start_yn = "Y"
+        # 손절매 체크
+        elif close_price < average_buy_amount * (1 - stop_loss_threshold):
+            balance_amount, Number_share_held, average_buy_amount, total_stock_buy_amount, init_trade_start_yn, trading_flag = StopLoss(close_price, 
+                                                                                                                   balance_amount, 
+                                                                                                                   Number_share_held, 
+                                                                                                                   average_buy_amount, 
+                                                                                                                   total_stock_buy_amount)
         # 매수 거래,  종가 < 버퍼 매매 평단 %
         elif close_price < average_buy_amount+(average_buy_amount*buffer_trading_point*0.01) and balance_amount > one_time_buy_amount:
             # 매수 처리
@@ -179,25 +218,26 @@ def DoTrading(stock_name,balance_amount,start_trade_date,end_trade_date,buy_time
         if not batch_yn:
             print(f"날짜: {str(date)[0:10]},\t종가: {close_price:.2f},\t매매: {trading_flag},\t잔고: {balance_amount:.2f},\
 \t보유주식수: {Number_share_held},\t평균매수금액: {average_buy_amount},\t전체매수금액: {total_stock_buy_amount},\t평가금액: {assessment_amount}")
-        # 그래프 수치 설정
-        dates.append(date)
-        close_prices.append(close_price)
-        assessment_amounts.append(assessment_amount)
+            # 그래프 수치 설정
+            dates.append(date)
+            close_prices.append(close_price)
+            assessment_amounts.append(assessment_amount)
         
-    # 그래프 그리기
-    fig, ax1 = plt.subplots()
-    ax1.plot(dates, close_prices, color = 'green', alpha = 0.5)
-    # y축 라벨 및 범위 지정
-    ax1.set_ylabel('final', color = 'green', rotation = 0)
-    # ax1.set_ylim(0, 15)
 
-    ax2 = ax1.twinx()
-    ax2.plot(dates, assessment_amounts, color = 'red', alpha = 0.5)
-    # y축 라벨 및 범위 지정
-    ax2.set_ylabel('assessment', color = 'red', rotation = 0)
-    # ax2.set_ylim(0, 2500)
 
     if not batch_yn:
+        # 그래프 그리기
+        fig, ax1 = plt.subplots()
+        ax1.plot(dates, close_prices, color = 'green', alpha = 0.5)
+        # y축 라벨 및 범위 지정
+        ax1.set_ylabel('final', color = 'green', rotation = 0)
+        # ax1.set_ylim(0, 15)
+
+        ax2 = ax1.twinx()
+        ax2.plot(dates, assessment_amounts, color = 'red', alpha = 0.5)
+        # y축 라벨 및 범위 지정
+        ax2.set_ylabel('assessment', color = 'red', rotation = 0)
+        # ax2.set_ylim(0, 2500)
         plt.show()
     else:
         return assessment_amount
@@ -206,5 +246,4 @@ def DoTrading(stock_name,balance_amount,start_trade_date,end_trade_date,buy_time
 if __name__ == "__main__":
 
     # 거래 시작
-    DoTrading(stock_name,balance_amount,start_trade_date,end_trade_date,buy_times,buffer_trading_point,sell_point,buffer_buy_divide,buffer_sell_divide,batch_yn)
-    
+    DoTrading(stock_name,balance_amount,start_trade_date,end_trade_date,buy_times,buffer_trading_point,sell_point,buffer_buy_divide,buffer_sell_divide,stop_loss_threshold,batch_yn)
