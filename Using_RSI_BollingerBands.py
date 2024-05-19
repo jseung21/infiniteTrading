@@ -19,33 +19,41 @@ def calculate_BollingerBands(data, window=20):
     lower_band = rolling_mean - (rolling_std * 2)
     return upper_band, lower_band
 
-def initial_buy_signal(data, rsi_threshold=30):
+def generate_signals(data, rsi_buy_threshold=30, rsi_sell_threshold=70):
     data['RSI'] = calculate_RSI(data)
     upper_band, lower_band = calculate_BollingerBands(data)
     data['Upper Band'] = upper_band
     data['Lower Band'] = lower_band
 
-    buy_signals = (data['Close'] < data['Lower Band']) & (data['RSI'] < rsi_threshold)
-    return buy_signals
+    buy_signals = (data['Close'] < data['Lower Band']) & (data['RSI'] < rsi_buy_threshold)
+    sell_signals = (data['Close'] > data['Upper Band']) | (data['RSI'] > rsi_sell_threshold)
+    
+    return buy_signals, sell_signals
 
-def plot_signals(data, buy_signals):
+def plot_signals(data, buy_signals, sell_signals):
     plt.figure(figsize=(12, 6))
     plt.plot(data['Close'], label='Close Price')
     plt.plot(data['Upper Band'], label='Upper Bollinger Band', linestyle='--')
     plt.plot(data['Lower Band'], label='Lower Bollinger Band', linestyle='--')
     plt.scatter(data.index[buy_signals], data['Close'][buy_signals], marker='^', color='g', label='Buy Signal')
+    plt.scatter(data.index[sell_signals], data['Close'][sell_signals], marker='v', color='r', label='Sell Signal')
     plt.legend()
     plt.show()
 
 def main():
-    stock_name = "SQQQ"
-    start_date = "2023-01-01"
+
+    stock_ticker = "SQQQ"
+    start_date = "2024-01-01"
     end_date = "2024-05-19"
     
-    stock_data = yf.download(stock_name, start=start_date, end=end_date)
+    # 데이터 가져오기
+    stock_data = yf.download(stock_ticker, start=start_date, end=end_date)
     
-    buy_signals = initial_buy_signal(stock_data)
-    plot_signals(stock_data, buy_signals)
+    # 매수 및 매도 신호 계산
+    buy_signals, sell_signals = generate_signals(stock_data)
+    
+    # 매수 및 매도 신호 시각화
+    plot_signals(stock_data, buy_signals, sell_signals)
 
 if __name__ == "__main__":
     main()
