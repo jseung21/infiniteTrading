@@ -19,7 +19,7 @@ if __name__ == "__main__":
         buffer_buy_divide = row["buffer_buy_divide"] # 버퍼 매수 분할 수치
         buffer_sell_divide = row["buffer_sell_divide"] # 버퍼 매도 분할 수치
         stop_loss_threshold = row["stop_loss_threshold"]  # 손절매 기준 예: 10%
-        batch_yn = True
+        batch_yn = False
         
         assessment_result = DoTrading(stock_name,balance_amount,start_trade_date,end_trade_date,buy_times,buffer_trading_point,sell_point,buffer_buy_divide,buffer_sell_divide,stop_loss_threshold,batch_yn)
     
@@ -32,6 +32,6 @@ if __name__ == "__main__":
  
     # 변경된 DataFrame을 sheet2에 저장
     with pd.ExcelWriter('infinitTrading.xlsx', engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
-        df.to_excel(writer, sheet_name='sheet2', index=False)
+        df.to_excel(writer, sheet_name='Result', index=False)
 
  
