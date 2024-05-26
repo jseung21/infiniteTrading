@@ -169,7 +169,6 @@ def DoTrading(stock_name, balance_amount, start_trade_date, end_trade_date, buy_
         Shares Held: {Number_share_held}, Avg Buy Amount: {average_buy_amount}, Total Buy Amount: {total_stock_buy_amount}, Assessment Amount: {assessment_amount}"
         
         if not batch_yn:
-            # st.write(log)
             dates.append(date)
             trading_prices.append(tradeing_price)
             if average_buy_amount != 0:
